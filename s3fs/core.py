@@ -12,7 +12,7 @@ import boto3.s3.transfer as trans
 from botocore.exceptions import ClientError, ParamValidationError
 from botocore.client import Config
 
-from .utils import read_block
+from .utils import read_block, raises
 
 logger = logging.getLogger(__name__)
 
@@ -365,7 +365,8 @@ class S3FileSystem(object):
         if split_path(path)[1]:
             return bool(self.ls(path))
         else:
-            return path in self.ls('')
+            return (path in self.ls('') and
+                    not raises(FileNotFoundError, lambda: self.ls(path)))
 
     def cat(self, path):
         """ Returns contents of file """
@@ -513,7 +514,7 @@ class S3FileSystem(object):
         else:
             try:
                 self.s3.create_bucket(Bucket=bucket)
-                self.invalidate_cache()
+                self.invalidate_cache('')
             except (ClientError, ParamValidationError):
                 raise IOError('Bucket create failed', path)
 
@@ -646,7 +647,8 @@ class S3File(object):
                     out = self.s3.s3.upload_part_copy(Bucket=self.bucket, Key=self.key,
                                 PartNumber=1, UploadId=self.mpu['UploadId'],
                                 CopySource=path)
-                    self.parts.append({'PartNumber': 1, 'ETag': out['CopyPartResult']['ETag']})
+                    self.parts.append({'PartNumber': 1,
+                                       'ETag': out['CopyPartResult']['ETag']})
         else:
             try:
                 self.size = self.info()['Size']
@@ -853,7 +855,7 @@ class S3File(object):
                                                      MultipartUpload=part_info)
             else:
                 self.s3.s3.put_object(Bucket=self.bucket, Key=self.key)
-            self.s3._ls(self.bucket, refresh=True)
+            self.s3.invalidate_cache(self.bucket)
 
     def readable(self):
         """Return whether the S3File was opened for reading"""
