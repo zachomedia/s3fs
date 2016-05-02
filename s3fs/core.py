@@ -4,6 +4,7 @@ import logging
 import re
 import socket
 from hashlib import md5
+import threading
 from contextlib import contextmanager
 
 import boto3
@@ -61,6 +62,25 @@ def split_path(path):
     else:
         return path.split('/', 1)
 
+
+class S3Pool(object):
+    methods = ['put_object', 'complete_multipart_upload', 'copy_object',
+               'delete_bucket', 'create_bucket', 'delete_object']
+
+    def __init__(self, s3, nmax=20):
+        self.threads = []
+        self.nmax = nmax
+        self.s3 = s3
+
+    def __getattr__(self, item):
+        func = getattr(self.s3, item)
+        if item not in self.methods:
+            return func
+
+        def launcher(*args, **kwargs):
+            threading.Thread(target=func, args=args, kwargs=kwargs).start()
+
+        return launcher
 
 class S3FileSystem(object):
     """
@@ -160,7 +180,7 @@ class S3FileSystem(object):
                 s3 = boto3.Session(self.key, self.secret, self.token,
                                    **self.kwargs).client('s3', config=conf)
             self._conn[tok] = s3
-        return self._conn[tok]
+        return S3Pool(self._conn[tok])
 
     def get_delegated_s3pars(self, exp=3600):
         """Get temporary credentials, apropriate for sending across a network
@@ -460,8 +480,8 @@ class S3FileSystem(object):
             Whether to remove also all entries below, i.e., which are returned
             by `walk()`.
         """
-        if not self.exists(path):
-            raise FileNotFoundError(path)
+        # if not self.exists(path):
+        #    raise FileNotFoundError(path)
         if recursive:
             for f in self.walk(path):
                 self.rm(f, recursive=False)
