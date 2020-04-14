@@ -95,7 +95,7 @@ class S3FileSystem(AbstractFileSystem):
         If not anonymous, use this security token, if specified
     use_ssl : bool (True)
         Whether to use SSL in connections to S3; may be faster without, but
-        insecure. If ``use_ssl`` is also set in ``client_kwargs``, 
+        insecure. If ``use_ssl`` is also set in ``client_kwargs``,
         the value set in ``client_kwargs`` will take priority.
     s3_additional_kwargs : dict of parameters that are used when calling s3 api
         methods. Typically used for things like "ServerSideEncryption".
@@ -174,6 +174,19 @@ class S3FileSystem(AbstractFileSystem):
 
         if client_kwargs is None:
             client_kwargs = {}
+
+        endpoint_url = os.environ.get("S3_ENDPOINT")
+        if not endpoint_url is None:
+            client_kwargs['endpoint_url'] = endpoint_url
+
+        use_https = os.environ.get("S3_USE_HTTPS")
+        if use_https == '0':
+            client_kwargs['use_https'] = False
+
+        verify = os.environ.get("S3_VERIFY_SSL")
+        if verify == '0':
+            client_kwargs['verify'] = False
+
         if config_kwargs is None:
             config_kwargs = {}
         self.default_block_size = default_block_size or self.default_block_size
@@ -278,9 +291,9 @@ class S3FileSystem(AbstractFileSystem):
             self.session = botocore.session.Session(**self.kwargs)
 
         logger.debug("Setting up s3fs instance")
-        
+
         client_kwargs = self.client_kwargs.copy()
-        init_kwargs = dict(aws_access_key_id=self.key, 
+        init_kwargs = dict(aws_access_key_id=self.key,
                            aws_secret_access_key=self.secret,
                            aws_session_token=self.token)
         init_kwargs = {key: value for key, value in init_kwargs.items()
@@ -290,12 +303,12 @@ class S3FileSystem(AbstractFileSystem):
         config_kwargs = self._prepare_config_kwargs()
         if self.anon:
             from botocore import UNSIGNED
-            drop_keys = {"aws_access_key_id", 
-                         "aws_secret_access_key", 
+            drop_keys = {"aws_access_key_id",
+                         "aws_secret_access_key",
                          "aws_session_token"}
-            init_kwargs = {key: value for key, value 
+            init_kwargs = {key: value for key, value
                            in init_kwargs.items() if key not in drop_keys}
-            client_kwargs = {key: value for key, value 
+            client_kwargs = {key: value for key, value
                              in client_kwargs.items() if key not in drop_keys}
             config_kwargs["signature_version"] = UNSIGNED
         conf = Config(**config_kwargs)
@@ -558,7 +571,7 @@ class S3FileSystem(AbstractFileSystem):
             except ParamValidationError as e:
                 raise ValueError('Failed to head path %r: %s' % (path, e))
         return super().info(path)
-    
+
     def checksum(self, path, refresh=False):
         """
         Unique value for current version of file
@@ -573,16 +586,16 @@ class S3FileSystem(AbstractFileSystem):
             path of file to get checksum for
         refresh : bool (=False)
             if False, look in local cache for file details first
-        
+
         """
 
         info = self.info(path, refresh=refresh)
-        
+
         if info["type"] != 'directory':
             return int(info["ETag"].strip('"'), 16)
         else:
             return int(tokenize(info), 16)
-        
+
 
     def isdir(self, path):
         path = self._strip_protocol(path).strip("/")
