@@ -173,6 +173,19 @@ class S3FileSystem(object):
             client_kwargs = {}
         if config_kwargs is None:
             config_kwargs = {}
+
+        use_https = os.environ.get("S3_USE_HTTPS")
+        if use_https == '0':
+            use_ssl = False
+
+        verify = os.environ.get("S3_VERIFY_SSL")
+        if verify == '0':
+            client_kwargs['verify'] = False
+
+        endpoint_url = os.environ.get("S3_ENDPOINT")
+        if not endpoint_url is None:
+            client_kwargs['endpoint_url'] = ('https://' if use_ssl else 'http://') + endpoint_url
+
         self.default_block_size = default_block_size or self.default_block_size
         self.default_fill_cache = default_fill_cache
         self.version_aware = version_aware
